@@ -64,6 +64,7 @@ _formatters = {
     'location': format_columns.DictColumn,
     'routes': RoutesColumn,
     'tags': format_columns.ListColumn,
+    'configurations': format_columns.DictColumn
 }
 
 
@@ -76,6 +77,8 @@ def _get_columns(item):
     }
     if hasattr(item, 'interfaces_info'):
         column_map['interfaces_info'] = 'interfaces_info'
+    if hasattr(item, 'configurations'):
+        column_map['configurations'] = 'configurations'
     invisible_columns = []
     if item.is_ha is None:
         invisible_columns.append('is_ha')
@@ -220,6 +223,19 @@ class CreateRouter(command.ShowOne):
             help=_("Set router description")
         )
         parser.add_argument(
+            '--preferred-agent',
+            help=_("Set the preferred agent of router (legacy router only)")
+        )
+        parser.add_argument(
+            '--master-agent',
+            help=_("Set the master agent of router (ha router only)")
+        )
+        parser.add_argument(
+            '--slave-agents',
+            type=str,
+            help=_("Set the slave agents of router (ha router only)")
+        )
+        parser.add_argument(
             '--project',
             metavar='<project>',
             help=_("Owner's project (name or ID)")
@@ -244,8 +260,17 @@ class CreateRouter(command.ShowOne):
         attrs = _get_attrs(self.app.client_manager, parsed_args)
         if parsed_args.ha:
             attrs['ha'] = True
+            if parsed_args.master_agent and parsed_args.slave_agents:
+                configurations = dict(
+                    master_agent=parsed_args.master_agent,
+                    slave_agents=parsed_args.slave_agents.split(',')
+                )
+                attrs['configurations'] = configurations
         if parsed_args.no_ha:
             attrs['ha'] = False
+            if parsed_args.prefrred_agent:
+                configurations = dict(prefrred_agent=parsed_args.prefrred_agent)
+                attrs['configurations'] = configurations
         obj = client.create_router(**attrs)
         # tags cannot be set when created, so tags need to be set later.
         _tag.update_tags_for_set(client, obj, parsed_args)
@@ -566,6 +591,19 @@ class SetRouter(command.Command):
                    "(disabled router only)")
         )
         parser.add_argument(
+            '--preferred-agent',
+            help=_("Set the preferred agent of router (disabled router only)")
+        )
+        parser.add_argument(
+            '--master-agent',
+            help=_("Set the master agent of router (disabled router only)")
+        )
+        parser.add_argument(
+            '--slave-agents',
+            type=str,
+            help=_("Set the slave agents of router (disabled router only)")
+        )
+        parser.add_argument(
             '--external-gateway',
             metavar="<network>",
             help=_("External Network used as router's gateway (name or ID)")
@@ -617,6 +655,19 @@ class SetRouter(command.Command):
             attrs['ha'] = True
         elif parsed_args.no_ha:
             attrs['ha'] = False
+
+        if parsed_args.master_agent or parsed_args.slave_agents:
+            configurations = dict()
+            if parsed_args.master_agent:
+                configurations['master_agent'] = parsed_args.master_agent
+            if parsed_args.slave_agents:
+                slave_agents = parsed_args.slave_agents.split(',')
+                configurations['slave_agents'] = slave_agents
+            attrs['configurations'] = configurations
+
+        if parsed_args.prefrred_agent:
+            configurations = dict(prefrred_agent=parsed_args.prefrred_agent)
+            attrs['configurations'] = configurations
 
         if parsed_args.routes is not None:
             for route in parsed_args.routes:
